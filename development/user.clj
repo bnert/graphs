@@ -24,12 +24,12 @@
 ;
 (def unidirectional-non-cyclical
   {"a" {"b" nil
-        "c" nil}
+        "c" 5}
    "b" {}
-   "c" {"d" nil}
-   "d" {"e" nil}
-   "e" {"f" nil}
-   "f" {"e" nil}
+   "c" {"d" 3}
+   "d" {"e" 4}
+   "e" {"f" 10}
+   "f" {"e" 10}
    ; lil' orphan z
    "z" nil})
 
@@ -45,7 +45,21 @@
    "z" {}
    })
 
+(def units
+  (graph/bidi
+    {"m"  {"ft" 3.28084}
+     "ft" {"in" 12}
+     "in" {}}
+    #(/ 1 %)))
+
 (comment
+  (get-in unidirectional ["a" "c"])
+
+  (let [pw (comp (partial graph/path->weights units)
+                 (partial graph/path units))]
+    (reduce * 10 (pw "m" "in")))
+
+  (reduce * 10 (graph/weights units "m" "in"))
 
   ; outgoing node/edge values for "a"
   (graph/outgoing? unidirectional "a")
@@ -63,11 +77,22 @@
   (graph/dfs unidirectional-non-cyclical "a" "f")
   (graph/bfs unidirectional-non-cyclical "a" "f")
 
+  (graph/dfs units "m" "in")
+  (graph/bfs units "m" "in")
+
   (graph/path unidirectional "a" "f")
   (graph/path unidirectional-non-cyclical "a" "f")
   (graph/path unidirectional "a" "z")
   (graph/path unidirectional "a" "b")
   (graph/path unidirectional "a" "a")
+
+  (graph/path->weights
+    unidirectional
+    (graph/path unidirectional "a" "f"))
+
+  (let [g unidirectional-non-cyclical]
+    (graph/path->weights g
+                         (graph/path g "a" "f")))
 
   (let [q (graph/q! ["a" "b" "c" "d"])]
     (println (peek q))
@@ -75,4 +100,20 @@
     (println (apply conj (pop q) ["1" "2" "3"]))
     (println (into (pop q) ["1" "2" "3"]))
     (println q))
+
+
+
+  ; window iter
+  (let [path        ["a" "b" "c"]
+        window-size 2]
+    (loop [path' path
+           steps []]
+      (if (< (count path') window-size)
+        steps
+        (recur (vec (rest path'))
+               (conj steps (subvec path' 0 window-size))))))
+
+
+
+
 )

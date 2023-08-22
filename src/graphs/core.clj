@@ -26,7 +26,11 @@
 
 (defprotocol Paths
   (path [this start-node end-node]
-    "Returns path of nodes. Empty seq if no path."))
+    "Returns path of nodes. Empty seq if no path.")
+  (path->weights [this path]
+    "Returns weights for a path.")
+  (weights [this start-node end-node]
+    "List of weights for a path, if path exists"))
 
 (defn unweighted-seq->unweighted-map [nodes]
   (cond
@@ -68,10 +72,8 @@
          paths   {start-node nil}
          visited []]
     (cond
-      (match? (peek queue))
-        (-> visited
-            (conj (peek queue))
-            (with-meta {:paths paths}))
+      (match? (last visited))
+        (with-meta visited {:paths paths})
       (empty? queue)
         (with-meta [] {:paths {}})
       :else
@@ -94,10 +96,8 @@
          paths   {start-node nil}
          visited []]
     (cond
-      (match? (peek stack))
-        (-> visited
-            (conj (peek stack))
-            (with-meta {:paths paths}))
+      (match? (last visited))
+        (with-meta visited {:paths paths})
       (empty? stack)
         (with-meta [] {:paths {}})
       :else
@@ -114,6 +114,15 @@
           (if (contains? vs top)
             (recur nstack np top)
             (recur nstack np (conj visited top)))))))
+
+(defn path->steps [path]
+  (loop [path' path
+         steps []]
+    (if (< (count path') 2)
+      steps
+      (recur (vec (rest path'))
+             (conj steps
+                   (subvec path' 0 2))))))
 
 (extend-type clojure.lang.PersistentArrayMap
   BreadthFirstSearch
@@ -158,5 +167,32 @@
           r' ((meta r) :paths)]
       (-> (bfs r' (last r) (first r))
           reverse
-          vec))))
+          vec)))
+  (path->weights [m path]
+    (println (path->steps path))
+    (mapv
+      (fn [[node-start node-end]]
+        (let [v? (unweighted-seq->unweighted-map
+                   (get m node-start))]
+          (or (get v? node-end) 0)))
+      (path->steps path)))
+  (weights [m start-node end-node]
+    (path->weights m (path m start-node end-node))))
+
+(defn invert [m from-node node-edge-set edge-fn]
+  (reduce-kv
+    (fn [m' node edge]
+      (update m' node (fnil assoc {}) from-node (edge-fn edge)))
+    m
+    node-edge-set))
+(defmulti bidi
+  (fn [t _] (type t)))
+
+(defmethod bidi clojure.lang.PersistentArrayMap
+ [m edge-fn]
+ (reduce-kv
+   (fn [m' k v]
+     (invert m' k v edge-fn))
+   m
+   m))
 
