@@ -32,7 +32,47 @@
   (weights [this start-node end-node]
     "List of weights for a path, if path exists"))
 
-(defn unweighted-seq->unweighted-map [nodes]
+(defmethod print-method clojure.lang.PersistentQueue [q, w] ; Overload the printer for queues so they look like fish
+  (print-method '<- w)
+  (print-method (seq q) w)
+  (print-method '-< w))
+
+(defn q!
+  ([]
+   (q! []))
+  ([coll]
+   (into clojure.lang.PersistentQueue/EMPTY coll)))
+
+(defn invert<-map [m from-node node-edge-set edge-fn]
+  (reduce-kv
+    (fn [m' node edge]
+      (update m' node (fnil assoc {}) from-node (edge-fn edge)))
+    m
+    node-edge-set))
+
+(defn node-edge-pairs->map [pairs]
+  (reduce
+    (fn [m [from-node to-node edge]]
+      (update m from-node (fnil assoc {}) to-node edge))
+    {}
+    pairs))
+
+(defmulti bidify
+  (fn [t _] (type t)))
+
+(defmethod bidify clojure.lang.PersistentArrayMap
+ [m edge-fn]
+ (reduce-kv
+   (fn [m' k v]
+     (invert<-map m' k v edge-fn))
+   m
+   m))
+
+(defmethod bidify clojure.lang.PersistentVector
+ [node-edge-pairs edge-fn]
+ (bidify (node-edge-pairs->map node-edge-pairs) edge-fn))
+
+(defn seq->unweighted-graph? [nodes]
   (cond
     (some #(%1 nodes) [vector? set? seq?])
       (reduce #(assoc %1 %2 nil) {} nodes)
@@ -56,16 +96,6 @@
             (recur (concat tail (keys (outgoing? m head)))
                    (conj visited head)))))))
 
-(defmethod print-method clojure.lang.PersistentQueue [q, w] ; Overload the printer for queues so they look like fish
-  (print-method '<- w)
-  (print-method (seq q) w)
-  (print-method '-< w))
-
-(defn q!
-  ([]
-   (q! []))
-  ([coll]
-   (into clojure.lang.PersistentQueue/EMPTY coll)))
 
 (defn bfs* [m start-node match?]
   (loop [queue   (q! [start-node])
@@ -133,7 +163,7 @@
   Cyclical
   (cyclical? [m]
     ; need to iterate over each node, given there could be a cycle
-    ; which isn't connected to a node in a potentially disjoint graph
+    ; which isn't connected to a node in a (potentially) disjoint graph
     (or (some #(map-graph-cyclical? m %1) (keys m)) false))
 
   DepthFirstSearch
@@ -149,7 +179,7 @@
         (if-not (seq node-edge-set)
           result
           (let [[[node' edge-nodes] & r] node-edge-set
-                edge-nodes (unweighted-seq->unweighted-map edge-nodes)]
+                edge-nodes (seq->unweighted-graph? edge-nodes)]
             (if (contains? edge-nodes node)
               (recur r
                      (assoc result node' (get edge-nodes node)))
@@ -159,7 +189,7 @@
   Outgoing
   (outgoing? [m node]
     (when (contains? m node)
-      (unweighted-seq->unweighted-map (get m node))))
+      (seq->unweighted-graph? (get m node))))
 
   Paths
   (path [m start-node end-node]
@@ -172,27 +202,9 @@
     (println (path->steps path))
     (mapv
       (fn [[node-start node-end]]
-        (let [v? (unweighted-seq->unweighted-map
-                   (get m node-start))]
+        (let [v? (seq->unweighted-graph? (get m node-start))]
           (or (get v? node-end) 0)))
       (path->steps path)))
   (weights [m start-node end-node]
     (path->weights m (path m start-node end-node))))
-
-(defn invert [m from-node node-edge-set edge-fn]
-  (reduce-kv
-    (fn [m' node edge]
-      (update m' node (fnil assoc {}) from-node (edge-fn edge)))
-    m
-    node-edge-set))
-(defmulti bidi
-  (fn [t _] (type t)))
-
-(defmethod bidi clojure.lang.PersistentArrayMap
- [m edge-fn]
- (reduce-kv
-   (fn [m' k v]
-     (invert m' k v edge-fn))
-   m
-   m))
 

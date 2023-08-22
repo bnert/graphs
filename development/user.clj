@@ -46,13 +46,24 @@
    })
 
 (def units
-  (graph/bidi
+  (graph/bidify
     {"m"  {"ft" 3.28084}
      "ft" {"in" 12}
      "in" {}}
     #(/ 1 %)))
 
+(def units'
+  (graph/bidify
+    [["m"  "ft" 3.28084]
+     ["ft" "in" 12]]
+    #(/ 1 %)))
+
 (comment
+  (= units units')
+  (identity units')
+
+  (graph/cyclical? units')
+
   (get-in unidirectional ["a" "c"])
 
   (let [pw (comp (partial graph/path->weights units)
