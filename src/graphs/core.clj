@@ -199,7 +199,6 @@
           reverse
           vec)))
   (path->weights [m path]
-    (println (path->steps path))
     (mapv
       (fn [[node-start node-end]]
         (let [v? (seq->unweighted-graph? (get m node-start))]
